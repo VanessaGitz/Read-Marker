@@ -1236,6 +1236,7 @@ local SMALL_MENU_ACTION_WIKIPEDIA = "sm_wikipedia"
 local SMALL_MENU_ACTION_TRANSLATE = "sm_translate"
 local SMALL_MENU_ACTION_SEARCH_BOOK = "sm_search_book"
 local SMALL_MENU_ACTION_LAST_READ = "sm_last_read"
+local SMALL_MENU_ACTION_DETAILS = "sm_details"
 
 local SMALL_MENU_ACTIONS = {
 	-- "label" is the descriptive text shown in the settings menu (where
@@ -1253,7 +1254,8 @@ local SMALL_MENU_ACTIONS = {
 	{ id = SMALL_MENU_ACTION_WIKIPEDIA, label = _("Wikipedia"), short_label = _("Wikipedia") },
 	{ id = SMALL_MENU_ACTION_TRANSLATE, label = _("Translate"), short_label = _("Translate") },
 	{ id = SMALL_MENU_ACTION_SEARCH_BOOK, label = _("Fulltext search"), short_label = _("Search") },
-   { id = SMALL_MENU_ACTION_LAST_READ, label = _("Mark as last read"), short_label = _("Last Read") },
+   { id = SMALL_MENU_ACTION_LAST_READ, label = _("Mark as last read"), short_label = _("Stop") },
+	{ id = SMALL_MENU_ACTION_DETAILS, label = _("KOReader selection menu"), short_label = _("Details") },
 }
 
 local SMALL_MENU_ACTION_BY_ID = {}
@@ -1279,8 +1281,8 @@ local WORD_REVIEW_CONTEXT_SEARCH_WORDS = 40
 local SMALL_MENU_MAX_BUTTONS = 3
 local SMALL_MENU_DEFAULT_BUTTONS = {
 	SMALL_MENU_ACTION_HIGHLIGHT,
-	SMALL_MENU_ACTION_ADD_NOTE,
-	SMALL_MENU_ACTION_WORD_REVIEW,
+	SMALL_MENU_ACTION_LAST_READ,
+	SMALL_MENU_ACTION_DETAILS,
 }
 
 -- Text-fallback footer buttons (used when no icon file is available) show
@@ -4709,6 +4711,14 @@ end
 -- produce more buttons than the menu is allowed to show.
 function FloatingDictionary:getSmallMenuButtonIds()
 	local saved = G_reader_settings:readSetting(SETTING_SMALL_MENU_BUTTONS)
+	-- Migrate only the original three-button layout; respect other custom layouts.
+	if type(saved) == "table" and #saved == 3
+		and saved[1] == SMALL_MENU_ACTION_HIGHLIGHT
+		and saved[2] == SMALL_MENU_ACTION_ADD_NOTE
+		and saved[3] == SMALL_MENU_ACTION_WORD_REVIEW then
+		saved = { SMALL_MENU_ACTION_HIGHLIGHT, SMALL_MENU_ACTION_LAST_READ, SMALL_MENU_ACTION_DETAILS }
+		G_reader_settings:saveSetting(SETTING_SMALL_MENU_BUTTONS, saved)
+	end
 	local order = {}
 	if type(saved) == "table" then
 		local seen = {}
@@ -6958,6 +6968,22 @@ function FloatingDictionary:runSmallMenuAction(action_id, dict_self, word, revie
 		-- Do not clear the selection before highlighting -- ReaderHighlight
 		-- needs the original selected_text/hold_pos to create the annotation.
 		return self:highlightSelection(dict_self, dict_close_callback)
+	elseif action_id == SMALL_MENU_ACTION_DETAILS then
+		local highlight = self:restoreSelection(dict_self)
+		if not (highlight and highlight.selected_text and highlight.selected_text.pos0 and highlight.selected_text.pos1) then
+			return self:notify(_("No text selection available."))
+		end
+		-- Use KOReader's native selection menu, not the dictionary action menu.
+		highlight.is_word_selection = false
+		UIManager:scheduleIn(0.05, function()
+			local ok, err = pcall(function()
+				highlight:onShowHighlightMenu()
+			end)
+			if not ok then
+				logger.warn("FloatingDictionary: native selection menu failed:", err)
+			end
+		end)
+		return true
 	elseif action_id == SMALL_MENU_ACTION_ADD_NOTE then
 		return self:addNoteForSelection(dict_self, dict_close_callback)
 	elseif action_id == SMALL_MENU_ACTION_WORD_REVIEW then
