@@ -7021,6 +7021,12 @@ function FloatingDictionary:runSmallMenuAction(action_id, dict_self, word, revie
 
                 if xp and self.ui and self.ui.doc_settings then
                         self.ui.doc_settings:saveSetting("last_read_arrow_xpointer", xp)
+                        local end_xp = selected and selected.pos1
+                        if end_xp then
+                                self.ui.doc_settings:saveSetting("last_read_arrow_end_xpointer", end_xp)
+                        else
+                                self.ui.doc_settings:delSetting("last_read_arrow_end_xpointer")
+                        end
 
                         UIManager:show(Notification:new{
                                 text = _("Reading position marked"),
@@ -7033,6 +7039,11 @@ function FloatingDictionary:runSmallMenuAction(action_id, dict_self, word, revie
                         if dict_close_callback then
                                 pcall(dict_close_callback)
                         end
+                        UIManager:scheduleIn(0.1, function()
+                                if self.ui and self.ui.dialog then
+                                        UIManager:setDirty(self.ui.dialog, "ui")
+                                end
+                        end)
 
                         return true
                 end
